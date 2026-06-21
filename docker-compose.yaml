@@ -9,6 +9,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: "Production"
       ASPNETCORE_HTTP_PORTS: "8080"
+      Api__EnableSwagger: "${API_ENABLE_SWAGGER:-true}"
       TZ: "${TZ:-Europe/Istanbul}"
       Converter__InputRoot: "/app/data/input"
       Converter__OutputRoot: "/app/data/output"

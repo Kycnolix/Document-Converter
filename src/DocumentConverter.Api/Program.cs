@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 var builder = WebApplication.CreateBuilder(args);
 var converterOptions = builder.Configuration.GetSection("Converter").Get<ConverterStorageOptions>() ?? new ConverterStorageOptions();
 var mongoOptions = builder.Configuration.GetSection("Mongo").Get<MongoOptions>() ?? new MongoOptions();
+var enableSwagger = builder.Configuration.GetValue<bool?>("Api:EnableSwagger") ?? builder.Environment.IsDevelopment();
 
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -22,6 +23,16 @@ builder.Services.Configure<MongoOptions>(builder.Configuration.GetSection("Mongo
 builder.Services.Configure<FormOptions>(options =>
 {
     options.MultipartBodyLengthLimit = converterOptions.MaxUploadBytes;
+});
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new()
+    {
+        Title = "Document Converter API",
+        Version = "v1",
+        Description = "Developer-facing API documentation for testing document conversion endpoints."
+    });
 });
 builder.Services.AddSingleton(sp =>
     new MongoConversionJobStore(
@@ -45,6 +56,17 @@ app.Logger.LogInformation("JobsRoot: {JobsRoot}", converterOptions.JobsRoot);
 app.Logger.LogInformation("MaxUploadBytes: {MaxUploadBytes}", converterOptions.MaxUploadBytes);
 app.Logger.LogInformation("MongoDatabaseName: {MongoDatabaseName}", mongoOptions.DatabaseName);
 app.Logger.LogInformation("MongoCollectionName: {MongoCollectionName}", mongoOptions.ConversionJobsCollectionName);
+app.Logger.LogInformation("SwaggerEnabled: {SwaggerEnabled}", enableSwagger);
+
+if (enableSwagger)
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.RoutePrefix = "swagger";
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Document Converter API v1");
+    });
+}
 
 app.MapGet("/health", () =>
 {
@@ -52,7 +74,10 @@ app.MapGet("/health", () =>
     {
         Status = "Healthy"
     }));
-});
+})
+.WithTags("System")
+.WithSummary("Reports basic liveness for the API.")
+.Produces<ApiResponse<HealthResponse>>(StatusCodes.Status200OK);
 
 app.MapGet("/ready", async (
     ReadinessService readinessService,
@@ -68,14 +93,19 @@ app.MapGet("/ready", async (
     return Results.Json(
         ApiResponse.Error("Service is not ready.", readinessResponse),
         statusCode: StatusCodes.Status503ServiceUnavailable);
-});
+})
+.WithTags("System")
+.WithSummary("Reports readiness after directory and MongoDB checks.")
+.Produces<ApiResponse<ReadinessResponse>>(StatusCodes.Status200OK)
+.Produces<ApiResponse<object?>>(StatusCodes.Status503ServiceUnavailable);
 
 app.MapPost("/api/conversions", async (
-    [FromForm] IFormFile? file,
-    [FromForm] string? targetFormat,
+    [FromForm] ConversionUploadRequest request,
     ConversionJobService conversionJobService,
     CancellationToken cancellationToken) =>
 {
+    var file = request.File;
+    var targetFormat = request.TargetFormat;
     var normalizedTargetFormat = string.IsNullOrWhiteSpace(targetFormat) ? "pdf" : targetFormat.Trim().ToLowerInvariant();
 
     if (file is null)
@@ -135,7 +165,13 @@ app.MapPost("/api/conversions", async (
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 })
-.DisableAntiforgery();
+.DisableAntiforgery()
+.WithTags("Conversions")
+.WithSummary("Uploads a supported Office document and creates a tracked conversion job.")
+.Accepts<ConversionUploadRequest>("multipart/form-data")
+.Produces<ApiResponse<ConversionCreateResponse>>(StatusCodes.Status200OK)
+.Produces<ApiResponse<object?>>(StatusCodes.Status400BadRequest)
+.Produces<ApiResponse<object?>>(StatusCodes.Status503ServiceUnavailable);
 
 app.MapGet("/api/conversions/{jobId}", async (
     string jobId,
@@ -165,7 +201,13 @@ app.MapGet("/api/conversions/{jobId}", async (
             ApiResponse.Error("Conversion job storage is currently unavailable."),
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
-});
+})
+.WithTags("Conversions")
+.WithSummary("Gets the current status of a tracked conversion job.")
+.Produces<ApiResponse<ConversionStatusResponse>>(StatusCodes.Status200OK)
+.Produces<ApiResponse<object?>>(StatusCodes.Status400BadRequest)
+.Produces<ApiResponse<object?>>(StatusCodes.Status404NotFound)
+.Produces<ApiResponse<object?>>(StatusCodes.Status503ServiceUnavailable);
 
 app.MapGet("/api/conversions/{jobId}/result", async (
     string jobId,
@@ -204,6 +246,13 @@ app.MapGet("/api/conversions/{jobId}/result", async (
             ApiResponse.Error("Conversion job storage is currently unavailable."),
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
-});
+})
+.WithTags("Conversions")
+.WithSummary("Downloads the generated PDF when the conversion result is ready.")
+.Produces<byte[]>(StatusCodes.Status200OK, "application/pdf")
+.Produces<ApiResponse<object?>>(StatusCodes.Status400BadRequest)
+.Produces<ApiResponse<object?>>(StatusCodes.Status404NotFound)
+.Produces<ApiResponse<object?>>(StatusCodes.Status409Conflict)
+.Produces<ApiResponse<object?>>(StatusCodes.Status503ServiceUnavailable);
 
 app.Run();

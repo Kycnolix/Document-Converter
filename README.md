@@ -52,6 +52,14 @@ curl http://localhost:8088/health
 curl http://localhost:8088/ready
 ```
 
+Swagger UI:
+
+- `http://localhost:8088/swagger`
+- OpenAPI JSON: `http://localhost:8088/swagger/v1/swagger.json`
+- Toggle with `API_ENABLE_SWAGGER=true|false`
+- Default in Docker Compose: enabled
+- Do not expose Swagger publicly without authentication or reverse-proxy/network restriction
+
 ## API Endpoints
 
 - `GET /health`
@@ -59,6 +67,8 @@ curl http://localhost:8088/ready
 - `POST /api/conversions`
 - `GET /api/conversions/{jobId}`
 - `GET /api/conversions/{jobId}/result`
+
+Swagger exposes all of these endpoints for browser-based testing, including multipart file upload for `POST /api/conversions`.
 
 ## Runtime Notes
 

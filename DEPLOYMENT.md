@@ -30,7 +30,8 @@ document-converter/
 1. Copy `.env.example` to `.env`.
 2. Set `MONGO_CONNECTION_STRING` to the production MongoDB server.
 3. Set `API_PORT` if `8088` is already in use.
-4. Adjust upload size, polling, timeout, and lock settings only if your environment needs it.
+4. Set `API_ENABLE_SWAGGER=false` for public production deployments unless Swagger is protected behind an internal network or reverse proxy restriction.
+5. Adjust upload size, polling, timeout, and lock settings only if your environment needs it.
 
 Do not commit `.env`.
 
@@ -48,6 +49,12 @@ docker compose logs -f converter-api
 docker compose logs -f converter-worker
 curl http://localhost:8088/health
 curl http://localhost:8088/ready
+```
+
+For internal API testing, Swagger UI is available at:
+
+```txt
+http://localhost:8088/swagger
 ```
 
 ## Stop
@@ -83,6 +90,8 @@ docker compose up -d --build
   Check `docker compose ps`, inspect `/ready` for API readiness details, and review logs.
 - Port already in use:
   Change `API_PORT` in `.env` and restart the stack.
+- Swagger should not be exposed publicly:
+  Set `API_ENABLE_SWAGGER=false` unless access is restricted to trusted internal users.
 
 ## Security Notes
 
