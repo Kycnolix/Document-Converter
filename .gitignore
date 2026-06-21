@@ -10,9 +10,11 @@ data/output/*
 data/processed/*
 data/failed/*
 data/temp/*
+data/jobs/*
 
 !data/input/.gitkeep
 !data/output/.gitkeep
 !data/processed/.gitkeep
 !data/failed/.gitkeep
 !data/temp/.gitkeep
+!data/jobs/.gitkeep

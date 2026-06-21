@@ -1,4 +1,35 @@
 services:
+  converter-api:
+    build:
+      context: .
+      dockerfile: src/DocumentConverter.Api/Dockerfile
+
+    image: converter-api:latest
+    container_name: converter-api
+    restart: unless-stopped
+
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ASPNETCORE_HTTP_PORTS: "8080"
+      TZ: "Europe/Istanbul"
+
+      Converter__InputRoot: "/app/data/input"
+      Converter__OutputRoot: "/app/data/output"
+      Converter__ProcessedRoot: "/app/data/processed"
+      Converter__FailedRoot: "/app/data/failed"
+      Converter__TempRoot: "/app/data/temp"
+      Converter__JobsRoot: "/app/data/jobs"
+      Converter__MaxUploadBytes: "52428800"
+
+    volumes:
+      - "./data:/app/data"
+
+    ports:
+      - "8088:8080"
+
+    depends_on:
+      - converter-worker
+
   converter-worker:
     build:
       context: .
@@ -14,12 +45,12 @@ services:
 
       Converter__InputRoot: "/app/data/input"
       Converter__OutputRoot: "/app/data/output"
+      Converter__ProcessedRoot: "/app/data/processed"
+      Converter__FailedRoot: "/app/data/failed"
       Converter__TempRoot: "/app/data/temp"
-      Converter_ProcessedRoot: "/app/data/processed"
-      Converter_FailedRoot: "/app/data/failed"
       Converter__LibreOfficePath: "soffice"
       Converter__ConversionTimeoutSeconds: "120"
-      Converter_PollingIntervalSeconds: "30"
+      Converter__PollingIntervalSeconds: "30"
       Converter__MaxConcurrentJobs: "1"
 
     volumes:

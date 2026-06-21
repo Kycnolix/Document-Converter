@@ -1,102 +1,93 @@
-\# Document Converter
+# Document Converter
 
+Phase 3 MVP for converting Office documents to PDF with a simple HTTP API in front of a folder-based worker.
 
+## Projects
 
-Generic document conversion worker for converting office documents to PDF using LibreOffice inside Docker.
+- `src/DocumentConverter.Api`: minimal API for job submission, status checks, and result download
+- `src/DocumentConverter.Worker`: background worker that polls `data/input` and converts supported files to PDF with LibreOffice
 
+## Supported Source Formats
 
+- `.docx`
+- `.xlsx`
+- `.pptx`
+- `.doc`
+- `.xls`
+- `.ppt`
+- `.odt`
+- `.ods`
+- `.odp`
 
-\## Current Features
-
-
-
-\- Converts supported office files to PDF
-
-\- Supports DOCX, XLSX, PPTX, DOC, XLS, PPT, ODT, ODS, ODP
-
-\- Runs as a .NET Worker Service
-
-\- Runs inside Docker with LibreOffice
-
-\- Uses local volume-based input/output folders
-
-\- Moves processed files to `data/processed`
-
-\- Moves failed files to `data/failed`
-
-\- Keeps output PDFs in `data/output`
-
-
-
-\## Folder Structure
-
-
+## Folder Structure
 
 ```txt
-
 data
+  input       -> files waiting for conversion
+  output      -> generated PDF files
+  processed   -> successfully processed source files
+  failed      -> failed source files
+  temp        -> LibreOffice temporary profile folders
+  jobs        -> API job metadata files
+```
 
-&#x20; input       -> files waiting for conversion
+## How To Run
 
-&#x20; output      -> generated PDF files
-
-&#x20; processed   -> successfully processed source files
-
-&#x20; failed      -> failed source files
-
-&#x20; temp        -> LibreOffice temporary profile folders
-
-Run
-
+```bash
 docker compose up -d --build
+```
 
-Logs
+API base URL:
+`http://localhost:8088`
 
+Useful commands:
+
+```bash
+docker compose ps
+docker compose logs -f converter-api
 docker compose logs -f converter-worker
-
-Stop
-
 docker compose down
+```
 
-Test
+## API Endpoints
 
+### Health
 
+```bash
+curl http://localhost:8088/health
+```
 
-Place a supported file into:
+### Upload Conversion
 
+```bash
+curl -F "file=@data/sample.docx" -F "targetFormat=pdf" http://localhost:8088/api/conversions
+```
 
+### Check Status
 
-data/input
+```bash
+curl http://localhost:8088/api/conversions/{jobId}
+```
 
+### Download Result
 
+```bash
+curl -L -o result.pdf http://localhost:8088/api/conversions/{jobId}/result
+```
 
-The generated PDF will be written to:
+## Current Limitations
 
+- Folder/filesystem-based MVP
+- No database yet
+- No authentication yet
+- Status is inferred from files on disk
+- Only PDF target format is supported
 
+## Runtime Behavior
 
-data/output
-
-Current Architecture
-
-
-
-This is Phase 1 MVP.
-
-
-
-The worker currently uses folder-based polling. Later phases may add:
-
-
-
-Converter API
-
-Conversion job database
-
-Queue-based processing
-
-Object storage support
-
-Multi-worker scaling
-
-Health checks and metrics
+- The API writes uploaded files into `data/input`
+- The API stores job metadata in `data/jobs`
+- The worker converts supported files to PDF and writes output to `data/output`
+- Successful source files move to `data/processed`
+- Failed source files move to `data/failed`
 

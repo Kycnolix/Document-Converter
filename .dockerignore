@@ -11,3 +11,4 @@ data/output/*
 data/processed/*
 data/failed/*
 data/temp/*
+data/jobs/*
