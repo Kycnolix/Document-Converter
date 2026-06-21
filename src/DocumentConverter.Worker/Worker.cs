@@ -34,6 +34,8 @@ public sealed class Worker : BackgroundService
         _logger.LogInformation("FailedRoot: {FailedRoot}", _options.FailedRoot);
         _logger.LogInformation("TempRoot: {TempRoot}", _options.TempRoot);
         _logger.LogInformation("JobsRoot: {JobsRoot}", _options.JobsRoot);
+        _logger.LogInformation("WorkerId: {WorkerId}", _options.WorkerId);
+        _logger.LogInformation("JobLockSeconds: {JobLockSeconds}", _options.JobLockSeconds);
         _logger.LogInformation("PollingIntervalSeconds: {PollingIntervalSeconds}", _options.PollingIntervalSeconds);
 
         await _libreOfficeConverter.LogVersionAsync(stoppingToken);

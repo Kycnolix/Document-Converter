@@ -11,4 +11,6 @@ public sealed class ConverterOptions
     public string LibreOfficePath { get; set; } = "soffice";
     public int ConversionTimeoutSeconds { get; set; } = 120;
     public int PollingIntervalSeconds { get; set; } = 30;
+    public string WorkerId { get; set; } = string.Empty;
+    public int JobLockSeconds { get; set; } = 300;
 }

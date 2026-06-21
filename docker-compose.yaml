@@ -20,6 +20,9 @@ services:
       Converter__TempRoot: "/app/data/temp"
       Converter__JobsRoot: "/app/data/jobs"
       Converter__MaxUploadBytes: "52428800"
+      Mongo__ConnectionString: "mongodb://host.docker.internal:27017"
+      Mongo__DatabaseName: "document_converter"
+      Mongo__ConversionJobsCollectionName: "conversionJobs"
 
     volumes:
       - "./data:/app/data"
@@ -52,7 +55,12 @@ services:
       Converter__LibreOfficePath: "soffice"
       Converter__ConversionTimeoutSeconds: "120"
       Converter__PollingIntervalSeconds: "30"
+      Converter__WorkerId: "converter-worker-1"
+      Converter__JobLockSeconds: "300"
       Converter__MaxConcurrentJobs: "1"
+      Mongo__ConnectionString: "mongodb://host.docker.internal:27017"
+      Mongo__DatabaseName: "document_converter"
+      Mongo__ConversionJobsCollectionName: "conversionJobs"
 
     volumes:
       - "./data:/app/data"

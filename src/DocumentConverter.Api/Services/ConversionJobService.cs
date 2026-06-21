@@ -3,7 +3,6 @@ using DocumentConverter.Api.Options;
 using DocumentConverter.Shared.Models;
 using DocumentConverter.Shared.Storage;
 using Microsoft.Extensions.Options;
-using SharedConversionJobMetadata = DocumentConverter.Shared.Models.ConversionJobMetadata;
 
 namespace DocumentConverter.Api.Services;
 
@@ -24,16 +23,16 @@ public sealed class ConversionJobService
 
     private readonly ILogger<ConversionJobService> _logger;
     private readonly ConverterStorageOptions _options;
-    private readonly ConversionJobMetadataStore _metadataStore;
+    private readonly IConversionJobStore _jobStore;
 
     public ConversionJobService(
         ILogger<ConversionJobService> logger,
         IOptions<ConverterStorageOptions> options,
-        ConversionJobMetadataStore metadataStore)
+        IConversionJobStore jobStore)
     {
         _logger = logger;
         _options = options.Value;
-        _metadataStore = metadataStore;
+        _jobStore = jobStore;
     }
 
     public long MaxUploadBytes => _options.MaxUploadBytes;
@@ -45,7 +44,7 @@ public sealed class ConversionJobService
         Directory.CreateDirectory(_options.ProcessedRoot);
         Directory.CreateDirectory(_options.FailedRoot);
         Directory.CreateDirectory(_options.TempRoot);
-        _metadataStore.EnsureDirectory();
+        Directory.CreateDirectory(_options.JobsRoot);
     }
 
     public bool IsSupportedSourceExtension(string extension)
@@ -53,7 +52,7 @@ public sealed class ConversionJobService
         return SupportedSourceExtensions.Contains(extension);
     }
 
-    public async Task<SharedConversionJobMetadata> CreateJobAsync(
+    public async Task<ConversionJobMetadata> CreateJobAsync(
         IFormFile file,
         string targetFormat,
         CancellationToken cancellationToken)
@@ -62,14 +61,14 @@ public sealed class ConversionJobService
 
         var safeOriginalFileName = GetSafeOriginalFileName(file.FileName);
         var extension = Path.GetExtension(safeOriginalFileName).ToLowerInvariant();
-        var jobId = CreateUniqueJobId(extension);
+        var jobId = Guid.NewGuid().ToString("D");
         var storedSourceFileName = $"{jobId}{extension}";
         var expectedOutputFileName = $"{jobId}.pdf";
         var sourcePath = Path.Combine(_options.InputRoot, storedSourceFileName);
-        var tempSourcePath = Path.Combine(_options.TempRoot, $"{jobId}{extension}.uploading");
+        var tempSourcePath = Path.Combine(_options.InputRoot, $"{jobId}{extension}.uploading");
         var now = DateTimeOffset.UtcNow;
 
-        var metadata = new SharedConversionJobMetadata
+        var metadata = new ConversionJobMetadata
         {
             JobId = jobId,
             OriginalFileName = safeOriginalFileName,
@@ -91,7 +90,7 @@ public sealed class ConversionJobService
                 await file.CopyToAsync(sourceStream, cancellationToken);
             }
 
-            await _metadataStore.SaveAsync(metadata, cancellationToken);
+            await _jobStore.CreateAsync(metadata, cancellationToken);
             File.Move(tempSourcePath, sourcePath, overwrite: false);
 
             _logger.LogInformation(
@@ -106,17 +105,26 @@ public sealed class ConversionJobService
         {
             TryDeleteFile(tempSourcePath);
             TryDeleteFile(sourcePath);
-            TryDeleteFile(GetMetadataPath(jobId));
+
+            try
+            {
+                await _jobStore.DeleteAsync(jobId, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete MongoDB job after upload cleanup. JobId={JobId}", jobId);
+            }
+
             throw;
         }
     }
 
-    public async Task<SharedConversionJobMetadata?> GetMetadataAsync(string jobId, CancellationToken cancellationToken)
+    public async Task<ConversionJobMetadata?> GetMetadataAsync(string jobId, CancellationToken cancellationToken)
     {
-        return await _metadataStore.LoadAsync(jobId, cancellationToken);
+        return await _jobStore.GetByJobIdAsync(jobId, cancellationToken);
     }
 
-    public ConversionStatusResponse GetStatus(SharedConversionJobMetadata metadata)
+    public ConversionStatusResponse GetStatus(ConversionJobMetadata metadata)
     {
         var resolvedStatus = ResolveStatus(metadata);
         var resultUrl = resolvedStatus == ConversionJobStatus.Ready
@@ -138,57 +146,32 @@ public sealed class ConversionJobService
         };
     }
 
-    public string GetOutputFilePath(SharedConversionJobMetadata metadata)
+    public string GetOutputFilePath(ConversionJobMetadata metadata)
     {
         return Path.Combine(_options.OutputRoot, metadata.ExpectedOutputFileName);
     }
 
-    public string GetResultDownloadFileName(SharedConversionJobMetadata metadata)
+    public string GetResultDownloadFileName(ConversionJobMetadata metadata)
     {
         return Path.GetFileNameWithoutExtension(metadata.OriginalFileName) + ".pdf";
     }
 
-    private string CreateUniqueJobId(string extension)
-    {
-        while (true)
-        {
-            var jobId = Guid.NewGuid().ToString("D");
-
-            if (IsJobIdAvailable(jobId, extension))
-            {
-                return jobId;
-            }
-        }
-    }
-
-    private bool IsJobIdAvailable(string jobId, string extension)
-    {
-        var storedSourceFileName = $"{jobId}{extension}";
-        var expectedOutputFileName = $"{jobId}.pdf";
-
-        return !File.Exists(GetMetadataPath(jobId))
-            && !File.Exists(Path.Combine(_options.InputRoot, storedSourceFileName))
-            && !File.Exists(Path.Combine(_options.OutputRoot, expectedOutputFileName))
-            && !File.Exists(Path.Combine(_options.ProcessedRoot, storedSourceFileName))
-            && !File.Exists(Path.Combine(_options.FailedRoot, storedSourceFileName));
-    }
-
-    private string GetMetadataPath(string jobId)
-    {
-        return Path.Combine(_options.JobsRoot, $"{jobId}.json");
-    }
-
-    private string ResolveStatus(SharedConversionJobMetadata metadata)
+    private string ResolveStatus(ConversionJobMetadata metadata)
     {
         if (File.Exists(GetOutputFilePath(metadata)))
         {
             return ConversionJobStatus.Ready;
         }
 
+        if (string.Equals(metadata.Status, ConversionJobStatus.Ready, StringComparison.OrdinalIgnoreCase))
+        {
+            return ConversionJobStatus.Unknown;
+        }
+
         if (string.Equals(metadata.Status, ConversionJobStatus.Failed, StringComparison.OrdinalIgnoreCase)
             || string.Equals(metadata.Status, ConversionJobStatus.Unsupported, StringComparison.OrdinalIgnoreCase))
         {
-            return ConversionJobStatus.Failed;
+            return metadata.Status;
         }
 
         if (string.Equals(metadata.Status, ConversionJobStatus.Processing, StringComparison.OrdinalIgnoreCase))
@@ -200,6 +183,11 @@ public sealed class ConversionJobService
             && string.Equals(metadata.Status, ConversionJobStatus.Pending, StringComparison.OrdinalIgnoreCase))
         {
             return ConversionJobStatus.Pending;
+        }
+
+        if (File.Exists(Path.Combine(_options.OutputRoot, metadata.ExpectedOutputFileName)))
+        {
+            return ConversionJobStatus.Ready;
         }
 
         if (File.Exists(Path.Combine(_options.FailedRoot, metadata.StoredSourceFileName)))
