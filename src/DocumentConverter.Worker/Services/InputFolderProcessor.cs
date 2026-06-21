@@ -40,9 +40,7 @@ public sealed class InputFolderProcessor
         _options = options.Value;
         _libreOfficeConverter = libreOfficeConverter;
         _jobStore = jobStore;
-        _workerId = string.IsNullOrWhiteSpace(_options.WorkerId)
-            ? CreateDefaultWorkerId()
-            : _options.WorkerId;
+        _workerId = ConverterOptions.ResolveWorkerId(_options.WorkerId);
         _jobLockDuration = TimeSpan.FromSeconds(_options.JobLockSeconds > 0 ? _options.JobLockSeconds : 300);
     }
 
@@ -292,15 +290,5 @@ public sealed class InputFolderProcessor
         {
             _logger.LogWarning(ex, logMessage, jobId);
         }
-    }
-
-    private static string CreateDefaultWorkerId()
-    {
-        if (!string.IsNullOrWhiteSpace(Environment.MachineName))
-        {
-            return Environment.MachineName;
-        }
-
-        return "worker-" + Guid.NewGuid().ToString("N");
     }
 }

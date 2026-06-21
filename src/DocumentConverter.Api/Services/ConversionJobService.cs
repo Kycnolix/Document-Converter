@@ -39,12 +39,10 @@ public sealed class ConversionJobService
 
     public void EnsureDirectories()
     {
-        Directory.CreateDirectory(_options.InputRoot);
-        Directory.CreateDirectory(_options.OutputRoot);
-        Directory.CreateDirectory(_options.ProcessedRoot);
-        Directory.CreateDirectory(_options.FailedRoot);
-        Directory.CreateDirectory(_options.TempRoot);
-        Directory.CreateDirectory(_options.JobsRoot);
+        foreach (var directoryPath in _options.GetManagedDirectories())
+        {
+            Directory.CreateDirectory(directoryPath);
+        }
     }
 
     public bool IsSupportedSourceExtension(string extension)

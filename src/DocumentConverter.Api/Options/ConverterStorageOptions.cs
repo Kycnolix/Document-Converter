@@ -9,4 +9,17 @@ public sealed class ConverterStorageOptions
     public string TempRoot { get; set; } = "/app/data/temp";
     public string JobsRoot { get; set; } = "/app/data/jobs";
     public long MaxUploadBytes { get; set; } = 52_428_800;
+
+    public IReadOnlyList<string> GetManagedDirectories()
+    {
+        return
+        [
+            InputRoot,
+            OutputRoot,
+            ProcessedRoot,
+            FailedRoot,
+            TempRoot,
+            JobsRoot
+        ];
+    }
 }

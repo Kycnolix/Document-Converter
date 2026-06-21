@@ -4,6 +4,8 @@ obj/
 .vscode/
 *.user
 *.suo
+.env
+result.pdf
 
 data/input/*
 data/output/*

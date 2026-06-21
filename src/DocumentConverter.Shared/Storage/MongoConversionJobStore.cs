@@ -1,6 +1,7 @@
 using DocumentConverter.Shared.Models;
 using DocumentConverter.Shared.Options;
 using Microsoft.Extensions.Logging;
+using MongoDB.Bson;
 using MongoDB.Driver;
 
 namespace DocumentConverter.Shared.Storage;
@@ -185,6 +186,14 @@ public sealed class MongoConversionJobStore : IConversionJobStore
             .Set(x => x.ErrorMessage, errorMessage);
 
         await _collection.UpdateOneAsync(filter, update, cancellationToken: cancellationToken);
+    }
+
+    public async Task CheckAvailabilityAsync(CancellationToken cancellationToken)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await _collection.Database.RunCommandAsync<BsonDocument>(
+            new BsonDocument("ping", 1),
+            cancellationToken: cancellationToken);
     }
 
     private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
