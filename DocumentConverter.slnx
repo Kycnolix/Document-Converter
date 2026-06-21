@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/DocumentConverter.Shared/DocumentConverter.Shared.csproj" />
     <Project Path="src/DocumentConverter.Api/DocumentConverter.Api.csproj" />
     <Project Path="src/DocumentConverter.Worker/DocumentConverter.Worker.csproj" />
   </Folder>

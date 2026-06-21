@@ -1,6 +1,6 @@
 # Document Converter
 
-Phase 3 MVP for converting Office documents to PDF with a simple HTTP API in front of a folder-based worker.
+Phase 4 MVP for converting Office documents to PDF with a simple HTTP API in front of a folder-based worker.
 
 ## Projects
 
@@ -28,7 +28,7 @@ data
   processed   -> successfully processed source files
   failed      -> failed source files
   temp        -> LibreOffice temporary profile folders
-  jobs        -> API job metadata files
+  jobs        -> shared API/worker job metadata files
 ```
 
 ## How To Run
@@ -79,14 +79,25 @@ curl -L -o result.pdf http://localhost:8088/api/conversions/{jobId}/result
 
 - Folder/filesystem-based MVP
 - No database yet
+- No queue yet
 - No authentication yet
-- Status is inferred from files on disk
+- Status is backed by metadata JSON and validated against files on disk
 - Only PDF target format is supported
+- Not horizontally safe for multiple workers yet because claim/locking is not implemented
+
+## Job Lifecycle Statuses
+
+- `Pending`: API accepted the upload and wrote metadata
+- `Processing`: worker started converting the tracked job
+- `Ready`: output PDF exists and the job completed successfully
+- `Failed`: conversion failed, timed out, or finished without a valid PDF
+- `Unknown`: API could not reconcile metadata with the current filesystem state
 
 ## Runtime Behavior
 
 - The API writes uploaded files into `data/input`
-- The API stores job metadata in `data/jobs`
+- The API stores and reads job metadata in `data/jobs`
+- The worker updates tracked job metadata in `data/jobs`
 - The worker converts supported files to PDF and writes output to `data/output`
 - Successful source files move to `data/processed`
 - Failed source files move to `data/failed`

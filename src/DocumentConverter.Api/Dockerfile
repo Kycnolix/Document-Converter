@@ -2,6 +2,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 COPY src/DocumentConverter.Api/DocumentConverter.Api.csproj src/DocumentConverter.Api/
+COPY src/DocumentConverter.Shared/DocumentConverter.Shared.csproj src/DocumentConverter.Shared/
 RUN dotnet restore src/DocumentConverter.Api/DocumentConverter.Api.csproj
 
 COPY . .

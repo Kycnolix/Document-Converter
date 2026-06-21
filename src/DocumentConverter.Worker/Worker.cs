@@ -33,6 +33,7 @@ public sealed class Worker : BackgroundService
         _logger.LogInformation("ProcessedRoot: {ProcessedRoot}", _options.ProcessedRoot);
         _logger.LogInformation("FailedRoot: {FailedRoot}", _options.FailedRoot);
         _logger.LogInformation("TempRoot: {TempRoot}", _options.TempRoot);
+        _logger.LogInformation("JobsRoot: {JobsRoot}", _options.JobsRoot);
         _logger.LogInformation("PollingIntervalSeconds: {PollingIntervalSeconds}", _options.PollingIntervalSeconds);
 
         await _libreOfficeConverter.LogVersionAsync(stoppingToken);
@@ -57,5 +58,6 @@ public sealed class Worker : BackgroundService
         Directory.CreateDirectory(_options.ProcessedRoot);
         Directory.CreateDirectory(_options.FailedRoot);
         Directory.CreateDirectory(_options.TempRoot);
+        Directory.CreateDirectory(_options.JobsRoot);
     }
 }

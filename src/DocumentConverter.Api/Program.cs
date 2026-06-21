@@ -1,11 +1,18 @@
 using DocumentConverter.Api.Models;
 using DocumentConverter.Api.Options;
 using DocumentConverter.Api.Services;
+using DocumentConverter.Shared.Models;
+using DocumentConverter.Shared.Storage;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<ConverterStorageOptions>(builder.Configuration.GetSection("Converter"));
+builder.Services.AddSingleton(sp =>
+    new ConversionJobMetadataStore(
+        sp.GetRequiredService<ILogger<ConversionJobMetadataStore>>(),
+        sp.GetRequiredService<IOptions<ConverterStorageOptions>>().Value.JobsRoot));
 builder.Services.AddSingleton<ConversionJobService>();
 
 var app = builder.Build();
@@ -72,7 +79,7 @@ app.MapPost("/api/conversions", async (
     return Results.Ok(ApiResponse.Success(new ConversionCreateResponse
     {
         JobId = metadata.JobId,
-        Status = "Pending",
+        Status = ConversionJobStatus.Pending,
         ResultUrl = null
     }));
 })
@@ -83,7 +90,7 @@ app.MapGet("/api/conversions/{jobId}", async (
     ConversionJobService conversionJobService,
     CancellationToken cancellationToken) =>
 {
-    if (!ConversionJobService.TryNormalizeJobId(jobId, out var normalizedJobId))
+    if (!ConversionJobMetadataStore.TryNormalizeJobId(jobId, out var normalizedJobId))
     {
         return Results.BadRequest(ApiResponse.Error("The supplied jobId is not a valid GUID."));
     }
@@ -104,7 +111,7 @@ app.MapGet("/api/conversions/{jobId}/result", async (
     ConversionJobService conversionJobService,
     CancellationToken cancellationToken) =>
 {
-    if (!ConversionJobService.TryNormalizeJobId(jobId, out var normalizedJobId))
+    if (!ConversionJobMetadataStore.TryNormalizeJobId(jobId, out var normalizedJobId))
     {
         return Results.BadRequest(ApiResponse.Error("The supplied jobId is not a valid GUID."));
     }

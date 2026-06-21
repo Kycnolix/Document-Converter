@@ -9,6 +9,10 @@ public sealed class LibreOfficeConverter
 {
     private readonly ILogger<LibreOfficeConverter> _logger;
     private readonly ConverterOptions _options;
+    private const string LibreOfficeExitNonZeroErrorCode = "LIBREOFFICE_EXIT_NON_ZERO";
+    private const string OutputNotFoundErrorCode = "OUTPUT_NOT_FOUND";
+    private const string ConversionTimeoutErrorCode = "CONVERSION_TIMEOUT";
+    private const string ConversionExceptionErrorCode = "CONVERSION_EXCEPTION";
 
     public LibreOfficeConverter(ILogger<LibreOfficeConverter> logger, IOptions<ConverterOptions> options)
     {
@@ -74,8 +78,8 @@ public sealed class LibreOfficeConverter
                     return new ConversionResult
                     {
                         Success = false,
-                        ErrorCode = process.ExitCode,
-                        ErrorMessage = stderr
+                        ErrorCode = LibreOfficeExitNonZeroErrorCode,
+                        ErrorMessage = GetNonZeroExitMessage(process.ExitCode, stderr)
                     };
                 }
 
@@ -89,7 +93,7 @@ public sealed class LibreOfficeConverter
                     return new ConversionResult
                     {
                         Success = false,
-                        ErrorCode = process.ExitCode,
+                        ErrorCode = OutputNotFoundErrorCode,
                         ErrorMessage = "Output file was not found after conversion."
                     };
                 }
@@ -111,6 +115,7 @@ public sealed class LibreOfficeConverter
                 return new ConversionResult
                 {
                     Success = false,
+                    ErrorCode = ConversionTimeoutErrorCode,
                     ErrorMessage = $"Conversion timed out after {_options.ConversionTimeoutSeconds} seconds."
                 };
             }
@@ -122,7 +127,8 @@ public sealed class LibreOfficeConverter
             return new ConversionResult
             {
                 Success = false,
-                ErrorMessage = ex.Message
+                ErrorCode = ConversionExceptionErrorCode,
+                ErrorMessage = "Conversion failed because an unexpected error occurred."
             };
         }
         finally
@@ -222,5 +228,15 @@ public sealed class LibreOfficeConverter
         {
             _logger.LogWarning(ex, "Failed to delete temp LibreOffice profile directory: {Path}", path);
         }
+    }
+
+    private static string GetNonZeroExitMessage(int exitCode, string stderr)
+    {
+        if (string.IsNullOrWhiteSpace(stderr))
+        {
+            return $"LibreOffice exited with code {exitCode}.";
+        }
+
+        return $"LibreOffice exited with code {exitCode}: {stderr.Trim()}";
     }
 }

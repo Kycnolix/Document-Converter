@@ -1,5 +1,7 @@
 using DocumentConverter.Worker.Options;
 using DocumentConverter.Worker.Utilities;
+using DocumentConverter.Shared.Models;
+using DocumentConverter.Shared.Storage;
 using Microsoft.Extensions.Options;
 
 namespace DocumentConverter.Worker.Services;
@@ -22,15 +24,18 @@ public sealed class InputFolderProcessor
     private readonly ILogger<InputFolderProcessor> _logger;
     private readonly ConverterOptions _options;
     private readonly LibreOfficeConverter _libreOfficeConverter;
+    private readonly ConversionJobMetadataStore _metadataStore;
 
     public InputFolderProcessor(
         ILogger<InputFolderProcessor> logger,
         IOptions<ConverterOptions> options,
-        LibreOfficeConverter libreOfficeConverter)
+        LibreOfficeConverter libreOfficeConverter,
+        ConversionJobMetadataStore metadataStore)
     {
         _logger = logger;
         _options = options.Value;
         _libreOfficeConverter = libreOfficeConverter;
+        _metadataStore = metadataStore;
     }
 
     public async Task ProcessAsync(CancellationToken stoppingToken)
@@ -55,33 +60,71 @@ public sealed class InputFolderProcessor
                 return;
             }
 
-            var targetPath = GetTargetPath(sourcePath);
+            var trackedJobMetadata = await _metadataStore.TryLoadBySourceFileNameAsync(
+                Path.GetFileName(sourcePath),
+                stoppingToken);
 
-            if (File.Exists(targetPath))
+            try
             {
-                _logger.LogInformation(
-                    "Output already exists. Moving source to processed. Source={SourceFileName}, Output={OutputFileName}",
-                    Path.GetFileName(sourcePath),
-                    Path.GetFileName(targetPath));
+                var targetPath = GetTargetPath(sourcePath);
 
-                MoveToProcessed(sourcePath);
-                continue;
+                if (File.Exists(targetPath))
+                {
+                    _logger.LogInformation(
+                        "Output already exists. Moving source to processed. Source={SourceFileName}, Output={OutputFileName}",
+                        Path.GetFileName(sourcePath),
+                        Path.GetFileName(targetPath));
+
+                    if (trackedJobMetadata is not null)
+                    {
+                        await MarkReadyAsync(trackedJobMetadata, stoppingToken);
+                    }
+
+                    MoveToProcessed(sourcePath);
+                    continue;
+                }
+
+                if (trackedJobMetadata is not null)
+                {
+                    await MarkProcessingAsync(trackedJobMetadata, stoppingToken);
+                }
+
+                var result = await _libreOfficeConverter.ConvertToPdfAsync(sourcePath, targetPath, stoppingToken);
+
+                if (result.Success)
+                {
+                    if (trackedJobMetadata is not null)
+                    {
+                        await MarkReadyAsync(trackedJobMetadata, stoppingToken);
+                    }
+
+                    _logger.LogInformation(
+                        "Conversion succeeded. Source={SourceFileName}, Output={TargetFileName}",
+                        Path.GetFileName(sourcePath),
+                        Path.GetFileName(targetPath));
+
+                    MoveToProcessed(sourcePath);
+                    continue;
+                }
+
+                if (trackedJobMetadata is not null)
+                {
+                    await MarkFailedAsync(trackedJobMetadata, result.ErrorCode, result.ErrorMessage, stoppingToken);
+                }
+
+                MoveToFailed(sourcePath);
             }
-
-            var result = await _libreOfficeConverter.ConvertToPdfAsync(sourcePath, targetPath, stoppingToken);
-
-            if (result.Success)
+            catch (Exception ex)
             {
-                _logger.LogInformation(
-                    "Conversion succeeded. Source={SourceFileName}, Output={TargetFileName}",
-                    Path.GetFileName(sourcePath),
-                    Path.GetFileName(targetPath));
+                _logger.LogError(ex, "Failed while processing source file. Source={SourceFileName}", Path.GetFileName(sourcePath));
 
-                MoveToProcessed(sourcePath);
-                continue;
+                if (trackedJobMetadata is not null)
+                {
+                    await TryMarkFailedAfterUnexpectedExceptionAsync(trackedJobMetadata, stoppingToken);
+                }
+
+                MoveToFailed(sourcePath);
             }
-
-            MoveToFailed(sourcePath);
         }
     }
 
@@ -105,5 +148,65 @@ public sealed class InputFolderProcessor
     private void MoveToFailed(string sourcePath)
     {
         FileMoveHelper.MoveToDirectory(_logger, sourcePath, _options.FailedRoot, "failed");
+    }
+
+    private async Task MarkProcessingAsync(ConversionJobMetadata metadata, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        metadata.Status = ConversionJobStatus.Processing;
+        metadata.StartedAtUtc ??= now;
+        metadata.FinishedAtUtc = null;
+        metadata.UpdatedAtUtc = now;
+        metadata.AttemptCount += 1;
+        metadata.ErrorCode = null;
+        metadata.ErrorMessage = null;
+
+        await _metadataStore.SaveAsync(metadata, cancellationToken);
+    }
+
+    private async Task MarkReadyAsync(ConversionJobMetadata metadata, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        metadata.Status = ConversionJobStatus.Ready;
+        metadata.FinishedAtUtc = now;
+        metadata.UpdatedAtUtc = now;
+        metadata.ErrorCode = null;
+        metadata.ErrorMessage = null;
+
+        await _metadataStore.SaveAsync(metadata, cancellationToken);
+    }
+
+    private async Task MarkFailedAsync(
+        ConversionJobMetadata metadata,
+        string? errorCode,
+        string? errorMessage,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        metadata.Status = ConversionJobStatus.Failed;
+        metadata.FinishedAtUtc = now;
+        metadata.UpdatedAtUtc = now;
+        metadata.ErrorCode = errorCode;
+        metadata.ErrorMessage = errorMessage;
+
+        await _metadataStore.SaveAsync(metadata, cancellationToken);
+    }
+
+    private async Task TryMarkFailedAfterUnexpectedExceptionAsync(
+        ConversionJobMetadata metadata,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await MarkFailedAsync(
+                metadata,
+                "CONVERSION_EXCEPTION",
+                "Conversion failed because an unexpected error occurred.",
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to update tracked job metadata after unexpected error. JobId={JobId}", metadata.JobId);
+        }
     }
 }

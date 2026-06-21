@@ -48,6 +48,7 @@ services:
       Converter__ProcessedRoot: "/app/data/processed"
       Converter__FailedRoot: "/app/data/failed"
       Converter__TempRoot: "/app/data/temp"
+      Converter__JobsRoot: "/app/data/jobs"
       Converter__LibreOfficePath: "soffice"
       Converter__ConversionTimeoutSeconds: "120"
       Converter__PollingIntervalSeconds: "30"
