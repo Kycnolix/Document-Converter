@@ -1,0 +1,13 @@
+.git
+.gitignore
+.vs
+.vscode
+
+**/bin
+**/obj
+
+data/input/*
+data/output/*
+data/processed/*
+data/failed/*
+data/temp/*

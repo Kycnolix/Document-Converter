@@ -1,0 +1,5 @@
+type nul > data\input\.gitkeep
+type nul > data\output\.gitkeep
+type nul > data\processed\.gitkeep
+type nul > data\failed\.gitkeep
+type nul > data\temp\.gitkeep

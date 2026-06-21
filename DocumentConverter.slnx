@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DocumentConverter.Worker/DocumentConverter.Worker.csproj" />
+  </Folder>
+</Solution>

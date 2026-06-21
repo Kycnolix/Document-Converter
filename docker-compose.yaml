@@ -1,0 +1,26 @@
+services:
+  converter-worker:
+    build:
+      context: .
+      dockerfile: src/DocumentConverter.Worker/Dockerfile
+
+    image: converter-worker:latest
+    container_name: converter-worker
+    restart: unless-stopped
+
+    environment:
+      DOTNET_ENVIRONMENT: "Production"
+      TZ: "Europe/Istanbul"
+
+      Converter__InputRoot: "/app/data/input"
+      Converter__OutputRoot: "/app/data/output"
+      Converter__TempRoot: "/app/data/temp"
+      Converter_ProcessedRoot: "/app/data/processed"
+      Converter_FailedRoot: "/app/data/failed"
+      Converter__LibreOfficePath: "soffice"
+      Converter__ConversionTimeoutSeconds: "120"
+      Converter_PollingIntervalSeconds: "30"
+      Converter__MaxConcurrentJobs: "1"
+
+    volumes:
+      - "./data:/app/data"
